@@ -1,4 +1,5 @@
 const { ethers, config } = require("hardhat");
+const { sign } = require("../schnorr/sign");
 const Buffer = require('safe-buffer').Buffer; 
 const BigInteger = require('bigi');
 const schnorr = require('bip-schnorr');
@@ -29,10 +30,10 @@ function wrapMagicBytes(sigRaw) {
   return ethers.utils.hexlify(concatTypedArrays(sig, magicBytesArray));
 }
 
-async function signAmbireSchnorr(sigRaw, useFinalDigestSigMode = false) {
+async function signAmbireSchnorr(sigRaw) {
 	// assert.equal(hash.length, 32, 'hash must be 32byte array buffer')
 	// was 01 originally but to avoid prefixing in solidity, we changed it to 00
-	return `${mapSignatureV(sigRaw)}${'04'}`
+	return `${sigRaw}${'04'}`
 }
 
 describe("UniversalSigValidator", function () {
@@ -45,6 +46,8 @@ describe("UniversalSigValidator", function () {
     const [signer, otherAccount] = await ethers.getSigners();
     const AmbireAccount = await ethers.getContractFactory("AmbireAccount");
     const contract = await AmbireAccount.deploy([signer.address]);
+    const isSigner = await contract.privileges(signer.address);
+    expect(isSigner).to.equal('0x0000000000000000000000000000000000000000000000000000000000000001');
 
     return { contract, signer, otherAccount };
   }
@@ -64,25 +67,31 @@ describe("UniversalSigValidator", function () {
     const createdSignatureFromHex = schnorr.sign(privateKeyHex, message);
   })
   it("should generate a schnorr signature", async function () {
+    // deploy the contract
+    const { contract, signer } = await loadFixture(deployValidator);
+
     // craft the signature
     const accounts = config.networks.hardhat.accounts
     const accountIndex = 0
     const wallet = ethers.Wallet.fromMnemonic(accounts.mnemonic, accounts.path + `/${accountIndex}`)
     const privateKey = wallet.privateKey
     const privateKeyHex = BigInteger.fromHex(privateKey.substring(2, privateKey.length));
-    const message = convert.hash(Buffer.from('i want to be free', 'utf8'));
-    const signature = schnorr.sign(privateKeyHex, message);
+    const bufferMsg = Buffer.from('i want to be free', 'utf8');
+    // console.log(convert.hash(bufferMsg));
+    // console.log(convert.hash('i want to be free'));
+    // console.log(ethers.utils.hashMessage('i want to be free'));
+    const {Px, e, s, parity} = sign(privateKeyHex, convert.hash(bufferMsg));
 
-    // TO DO:
-    // before adding the ambire last bytes,
-    // we need: bytes32 px, bytes32 e, uint8 parity
-    // after we find them, wrap everything into one
-    // and afterwards apply signAmbireSchnorr
-
-    const ambireSignature = await signAmbireSchnorr(signature, true);
-
-    const { contract } = await loadFixture(deployValidator);
-    const result = await contract.isValidSignature(message, ambireSignature);
+    // wrap the result
+    const abiCoder = new ethers.utils.AbiCoder();
+    const sigData = abiCoder.encode([ "bytes32", "bytes32", "bytes", "uint8" ], [
+      ethers.utils.hexlify(Px),
+      ethers.utils.hexlify(convert.intToBuffer(e)),
+      ethers.utils.hexlify(s),
+      parity ? 28 : 27
+    ]);
+    const ambireSignature = await signAmbireSchnorr(sigData);
+    const result = await contract.isValidSignature(convert.hash(bufferMsg), ambireSignature);
     console.log(result);
   })
 });

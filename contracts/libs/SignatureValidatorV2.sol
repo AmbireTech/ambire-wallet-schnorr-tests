@@ -52,29 +52,9 @@ library SignatureValidator {
 			return signer;
 		// {sig}{verifier}{mode}
 		} else if (mode == SignatureMode.Schnorr) {
-  			// px := public key x-coord
-			// e := schnorr signature challenge
-  			// s := schnorr signature
-			// parity := public key y-coord parity (27 or 28)
-			// last uint8 is for the Ambire sig mode - it's ignored
-			(bytes32 px, bytes32 e, bytes32 s, uint8 parity,) = abi.decode(sig, (bytes32, bytes32, bytes32, uint8, uint8));
-			console.logBytes32(px);
-			console.logBytes32(e);
-			console.logBytes32(s);
-			console.log(parity);
-			// ecrecover = (m, v, r, s);
-			bytes32 sp = bytes32(Q - mulmod(uint256(s), uint256(px), Q));
-			bytes32 ep = bytes32(Q - mulmod(uint256(e), uint256(px), Q));
 
-			require(sp != 0);
-			// the ecrecover precompile implementation checks that the `r` and `s`
-			// inputs are non-zero (in this case, `px` and `ep`), thus we don't need to
-			// check if they're zero.
-			address R = ecrecover(sp, parity, px, ep);
-			require(R != address(0), "ecrecover failed");
-			return e == keccak256(abi.encodePacked(R, uint8(parity), px, hash))
-				? address(uint160(uint256(px)))
-				: address(0);
+			return _verifySchnorr(sig, hash);
+
 		} else if (mode == SignatureMode.SmartWallet) {
 			// 32 bytes for the addr, 1 byte for the type = 33
 			require(sig.length > 33, "SV_LEN_WALLET");
@@ -97,5 +77,32 @@ library SignatureValidator {
 		}
 		// should be impossible to get here
 		return address(0);
+	}
+
+	function _verifySchnorr(bytes memory sig, bytes32 hash) internal view returns (address) {
+		// px := public key x-coord
+		// e := schnorr signature challenge
+		// s := schnorr signature
+		// parity := public key y-coord parity (27 or 28)
+		// last uint8 is for the Ambire sig mode - it's ignored
+
+		LibBytes.trimToSize(sig, sig.length - 1);
+		(bytes32 px, bytes32 e, bytes memory wholeSig, uint8 parity) = abi.decode(sig, (bytes32, bytes32, bytes, uint8));
+
+		// bytes32 r = LibBytes.readBytes32(wholeSig, 0);
+		bytes32 s = LibBytes.readBytes32(wholeSig, 32);
+		bytes32 sp = bytes32(Q - mulmod(uint256(s), uint256(px), Q));
+		bytes32 ep = bytes32(Q - mulmod(uint256(e), uint256(px), Q));
+
+		require(sp != 0);
+		// the ecrecover precompile implementation checks that the `r` and `s`
+		// inputs are non-zero (in this case, `px` and `ep`), thus we don't need to
+		// check if they're zero.
+		address R = ecrecover(sp, parity, px, ep);
+		console.log(R);
+		require(R != address(0), "ecrecover failed");
+		return e == keccak256(abi.encodePacked(R, uint8(parity), px, hash))
+			? address(uint160(uint256(px)))
+			: address(0);
 	}
 }
