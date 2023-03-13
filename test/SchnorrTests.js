@@ -1,5 +1,5 @@
 const { ethers, config } = require("hardhat");
-const { sign } = require("../schnorr/sign");
+const { sign, getPubKey } = require("../schnorr/sign");
 const Buffer = require('safe-buffer').Buffer; 
 const BigInteger = require('bigi');
 const schnorr = require('bip-schnorr');
@@ -45,20 +45,22 @@ describe("UniversalSigValidator", function () {
     // Contracts are deployed using the first signer/account by default
     const [signer, otherAccount] = await ethers.getSigners();
     const AmbireAccount = await ethers.getContractFactory("AmbireAccount");
-    const contract = await AmbireAccount.deploy([signer.address]);
-    const isSigner = await contract.privileges(signer.address);
+
+    // get the public key
+    const accounts = config.networks.hardhat.accounts
+    const accountIndex = 0
+    const wallet = ethers.Wallet.fromMnemonic(accounts.mnemonic, accounts.path + `/${accountIndex}`)
+    const privateKey = wallet.privateKey
+    const privateKeyHex = BigInteger.fromHex(privateKey.substring(2, privateKey.length));
+    const publicKey = getPubKey(privateKeyHex);
+    const schnorrAddress = ethers.utils.computeAddress(publicKey);
+    const contract = await AmbireAccount.deploy([schnorrAddress]);
+    const isSigner = await contract.privileges(schnorrAddress);
     expect(isSigner).to.equal('0x0000000000000000000000000000000000000000000000000000000000000001');
 
     return { contract, signer, otherAccount };
   }
 
-  it("Should deploy validator", async function () {
-    const { contract, signer } = await loadFixture(deployValidator);
-
-    // confirm set priviledges
-    const isSigner = await contract.privileges(signer.address);
-    expect(isSigner).to.equal('0x0000000000000000000000000000000000000000000000000000000000000001');
-  });
   it("should generate a schnorr signature", async function () {
     const privateKeyHex = 'B7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF';
     const privateKey = BigInteger.fromHex(privateKeyHex);
@@ -84,7 +86,7 @@ describe("UniversalSigValidator", function () {
 
     // wrap the result
     const abiCoder = new ethers.utils.AbiCoder();
-    const sigData = abiCoder.encode([ "bytes32", "bytes32", "bytes", "uint8" ], [
+    const sigData = abiCoder.encode([ "bytes32", "bytes32", "bytes32", "uint8" ], [
       ethers.utils.hexlify(Px),
       ethers.utils.hexlify(convert.intToBuffer(e)),
       ethers.utils.hexlify(s),
