@@ -4,6 +4,7 @@ const schnorr = require('bip-schnorr');
 const convert = schnorr.convert;
 const ecurve = require('ecurve');
 const curve = ecurve.getCurveByName('secp256k1');
+const { randomBytes } = require('crypto');
 const G = curve.G;
 const hexToBN = s => ethers.BigNumber.from(s);
 const Q = '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141';
@@ -36,7 +37,7 @@ describe("ChainLinkSchnorr", function () {
     return { contract, signer, otherAccount };
   }
 
-  it("should generate a schnorr signature", async function () {
+  it("should generate a schnorr signature and pass the chainlink contract verifier", async function () {
     const { contract, signer, otherAccount } = await loadFixture(deployContract);
 
     // get the message
@@ -60,11 +61,9 @@ describe("ChainLinkSchnorr", function () {
       PKx = convert.intToBuffer(P.affineX);
       isPKxAboveHalfQ = ethers.BigNumber.from(PKx).sub(halfQ) > 0;
     }
-
     const pubKeyYParity = P.affineY.mod(two).equals(zero) ? 0 : 1
 
-    // hardcode k for the test... obviously, it should not be done like this in prod
-    const k = hexToBN('0xd51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285');
+    const k = hexToBN(randomBytes(32));
     const kTimesGAddress = ethers.utils.computeAddress(k);
 
     const e = hexToBN(

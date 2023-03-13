@@ -96,10 +96,7 @@ library SignatureValidator {
 		// inputs are non-zero (in this case, `px` and `ep`), thus we don't need to
 		// check if they're zero.
 		address R = ecrecover(sp, parity, px, ep);
-		console.logBytes32(e);
-		console.logBytes32(keccak256(abi.encodePacked(R, uint8(parity), px, hash)));
 		require(R != address(0), "ecrecover failed");
-		console.log(e == keccak256(abi.encodePacked(R, uint8(parity), px, hash)));
 		return e == keccak256(abi.encodePacked(R, uint8(parity), px, hash))
 			? address(uint160(uint256(px)))
 			: address(0);
