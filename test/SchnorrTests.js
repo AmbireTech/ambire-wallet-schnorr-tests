@@ -14,7 +14,7 @@ async function signAmbireSchnorr(sigRaw) {
 	return `${sigRaw}${'04'}`
 }
 
-describe("UniversalSigValidator", function () {
+describe("SchnorrTests", function () {
   // We define a fixture to reuse the same setup in every test.
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Netw;ork to that snapshot in every test.
@@ -32,8 +32,8 @@ describe("UniversalSigValidator", function () {
     // 0x8fc45f9687181b4fdfc625bd1a753fa7397fed75
     const publicKey = secp256k1.publicKeyCreate(privateKey);
     const px = publicKey.slice(1, 33);
-    const someTest = ethers.utils.hexlify(px);
-    const address = "0x" + someTest.slice(someTest.length - 40, someTest.length);
+    const pxGeneratedAddress = ethers.utils.hexlify(px);
+    const address = "0x" + pxGeneratedAddress.slice(pxGeneratedAddress.length - 40, pxGeneratedAddress.length);
     const contract = await AmbireAccount.deploy([address]);
     const isSigner = await contract.privileges(address);
     expect(isSigner).to.equal('0x0000000000000000000000000000000000000000000000000000000000000001');
