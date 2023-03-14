@@ -2,6 +2,7 @@ const { ethers, config } = require("hardhat");
 const secp256k1 = require('secp256k1')
 const { randomBytes } = require('crypto');
 const ERC1271_MAGICVALUE_BYTES32 = "0x1626ba7e";
+const ERC1271_FAIL = "0xffffffff";
 const BigInteger = require('bigi');
 const schnorr = require('bip-schnorr');
 const convert = schnorr.convert;
@@ -130,5 +131,43 @@ describe("MultiSigSchnorr", function () {
     const ambireSignature = await signAmbireSchnorr(sigData);
     const result = await contract.isValidSignature(msgHash, ambireSignature);
     expect(result).to.equal(ERC1271_MAGICVALUE_BYTES32);
+  })
+
+  it("should fail when only one of two signatures is provided", async function () {
+    // deploy the contract
+    const { contract, signer } = await loadFixture(deployContract);
+
+    // craft signatures for private keys 0 and 1
+    const msg = 'just a test message';
+    const msgHash = ethers.utils.solidityKeccak256(['string'], [msg]);
+
+    // get private key and secrets
+    const {privateKey: privateKeyOne} = getKeyPair(0);
+    const {privateKey: privateKeyTwo} = getKeyPair(1);
+    const kOne = randomBytes(32);
+    const kTwo = randomBytes(32);
+
+    // R is the combined public key of the k secrets
+    const R = secp256k1.publicKeyCombine([secp256k1.publicKeyCreate(kOne), secp256k1.publicKeyCreate(kTwo)]);
+    // e = h(address(R) || compressed pubkey || m)
+    const combinedPublicKey = getCombinedPubKey();
+    const e = challenge(R, msgHash, combinedPublicKey);
+    const sigOne = sign(privateKeyOne, kOne, e);
+
+    // the multisig px and parity
+    const px = combinedPublicKey.slice(1,33);
+    const parity = combinedPublicKey[0] - 2 + 27;
+
+    // wrap the result
+    const abiCoder = new ethers.utils.AbiCoder();
+    const sigData = abiCoder.encode([ "bytes32", "bytes32", "bytes32", "uint8" ], [
+      px,
+      e,
+      sigOne,
+      parity
+    ]);
+    const ambireSignature = await signAmbireSchnorr(sigData);
+    const result = await contract.isValidSignature(msgHash, ambireSignature);
+    expect(result).to.equal(ERC1271_FAIL);
   })
 });

@@ -79,7 +79,7 @@ library SignatureValidator {
 		return address(0);
 	}
 
-	function _verifySchnorr(bytes memory sig, bytes32 hash) internal view returns (address) {
+	function _verifySchnorr(bytes memory sig, bytes32 hash) internal pure returns (address) {
 		// px := public key x-coord
 		// e := schnorr signature challenge
 		// s := schnorr signature
